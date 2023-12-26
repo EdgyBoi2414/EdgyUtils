@@ -1,6 +1,7 @@
 package com.edgy.utils.spigot;
 
 import com.edgy.utils.EdgyUtils;
+import com.edgy.utils.shared.DebugLogger;
 import com.edgy.utils.shared.Messages;
 import com.edgy.utils.spigot.tinyprotocol.Reflection;
 import com.edgy.utils.spigot.tinyprotocol.Reflection.FieldAccessor;
@@ -15,13 +16,20 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.bukkit.Bukkit;
+import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.SkullType;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
+import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.inventory.meta.SkullMeta;
+import org.bukkit.potion.PotionData;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionType;
 import org.bukkit.profile.PlayerProfile;
 import org.bukkit.profile.PlayerTextures;
 import org.geysermc.geyser.api.event.lifecycle.GeyserDefineCustomSkullsEvent.SkullTextureType;
@@ -141,6 +149,31 @@ public class Items {
 
     public ItemBuilder amount(int amount) {
       this.amount = amount;
+      return this;
+    }
+
+    @SuppressWarnings("deprecation")
+    public ItemBuilder potionEffect(PotionType type, boolean bool1, boolean bool2) {
+      try {
+        PotionMeta potionMeta = (PotionMeta) meta;
+        potionMeta.setBasePotionData(new PotionData(type, bool1, bool2));
+      } catch (Exception err) {
+        DebugLogger.warning("This item is not a potion!");
+      }
+      return this;
+    }
+
+    public ItemBuilder durability(int durability) {
+      if (meta instanceof Damageable) {
+        ((Damageable) meta).setDamage(durability);
+      } else {
+        DebugLogger.warning("This item is not damageable!");
+      }
+      return this;
+    }
+
+    public ItemBuilder dye(Color color) {
+      ((LeatherArmorMeta)this.meta).setColor(color);
       return this;
     }
 

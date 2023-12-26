@@ -36,6 +36,7 @@ import org.incendo.interfaces.core.click.ClickContext;
 import org.incendo.interfaces.core.click.ClickHandler;
 import org.incendo.interfaces.core.transform.Transform;
 import org.incendo.interfaces.core.util.Vector2;
+import org.incendo.interfaces.core.view.InterfaceView;
 import org.incendo.interfaces.paper.PlayerViewer;
 import org.incendo.interfaces.paper.element.ItemStackElement;
 import org.incendo.interfaces.paper.pane.ChestPane;
@@ -75,6 +76,7 @@ public class ConfigGUI {
   private final Map<String, Object> arguments = new HashMap<>();
   private final Runnable onClose;
   private final boolean noCloseButton;
+
   private ConfigGUI(
       Player player,
       Config config,
@@ -110,15 +112,29 @@ public class ConfigGUI {
 
     if (Bedrock.isBedrock() && Bedrock.isGeyserPlayer(player.getUniqueId()) && config.get()
         .getBoolean("bedrock.enabled", false)) {
+
       if (argumentParser != null) {
         DebugLogger.info("Handling arguments...");
         argumentParser.apply(player, config.get())
             .whenComplete((args, err) -> {
               if (err != null) {
-                throw new RuntimeException(err);
+                DebugLogger.log(
+                    Level.SEVERE,
+                    "Error occurred while handling arguments",
+                    err
+                );
+                return;
               }
 
-              bedrock(title, config, args);
+              try {
+                bedrock(title, config, args);
+              } catch (Exception err2) {
+                DebugLogger.log(
+                    Level.SEVERE,
+                    "Error occurred while building GUI",
+                    err2
+                );
+              }
             });
       } else {
         DebugLogger.info("No argument parser provided");
@@ -161,6 +177,7 @@ public class ConfigGUI {
 
     ChestInterface.Builder builder = ChestInterface.builder()
         .title(messages.component(title))
+        .updates(true, 10)
         .rows(rows)
         .clickHandler(ClickHandler.cancel())
         .addCloseHandler((event, view) -> onClose.run());
@@ -180,15 +197,36 @@ public class ConfigGUI {
       completableFutures.add(
           getItemStack(player, section)
               .exceptionally(throwable -> {
-                throw new RuntimeException(throwable);
+                DebugLogger.log(
+                    Level.SEVERE,
+                    "Error while handling required item: " + path,
+                    throwable
+                );
+                return new GUIElement(null, null);
               })
               .thenAccept(element -> transforms.add((pane, view) -> {
                 List<Integer> slots = section.getIntegerList("slots");
-                if (slots.isEmpty()) {
-                  throw new IllegalArgumentException(
-                      "Invalid slots for " + path + " in GUI " + config.get().getName()
-                          + "! (List was empty)"
+                if (element.item() == null) {
+                  DebugLogger.log(
+                      Level.SEVERE,
+                      "Error while handling required item: " + path,
+                      new IllegalArgumentException(
+                          "Invalid item for " + path + " in GUI " + config.get().getName()
+                              + "! (Item was null)"
+                      )
                   );
+                  return pane;
+                }
+                if (slots.isEmpty()) {
+                  DebugLogger.log(
+                      Level.SEVERE,
+                      "Error while handling required item: " + path,
+                      new IllegalArgumentException(
+                          "Invalid slots for " + path + " in GUI " + config.get().getName()
+                              + "! (List was empty)"
+                      )
+                  );
+                  return pane;
                 }
                 for (Integer slot : slots) {
                   Vector2 grid = PaperUtils.slotToGrid(slot);
@@ -250,48 +288,59 @@ public class ConfigGUI {
       );
     }
 
-    if (argumentParser != null) {
-      DebugLogger.info("Handling arguments");
-      completableFutures.add(
-          argumentParser.apply(player, config.get())
-              .thenAccept(this.arguments::putAll)
-      );
+    if (argumentParser == null) {
+      argumentParser = (p, s) -> CompletableFuture.completedFuture(new HashMap<>());
+    } else {
+      DebugLogger.info("Handling arguments...");
     }
-
-    DebugLogger.info("Handling custom transforms: " + customTransforms.size());
-    for (Function<Map<String, Object>, CompletableFuture<Transform<ChestPane, PlayerViewer>>> function : customTransforms) {
-      completableFutures.add(function.apply(arguments)
-          .exceptionally(throwable -> {
-            EdgyUtils.logger()
-                .log(Level.SEVERE, "Error building GUI" + config.get().getName(), throwable);
-            return null;
-          })
-          .thenAccept(transform -> {
-            if (transform != null) {
-              transforms.add(transform);
-            }
-          }));
-    }
-
-    ChestInterface.Builder finalBuilder = builder;
-    CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[]{}))
-        .exceptionally(throwable -> {
-          EdgyUtils.logger()
-              .log(Level.SEVERE, "Error building GUI" + config.get().getName(), throwable);
-          return null;
+    argumentParser.apply(player, config.get())
+        .exceptionally(err -> {
+          DebugLogger.log(
+              Level.SEVERE,
+              "Error building GUI" + config.get().getName(),
+              err
+          );
+          return new HashMap<>();
         })
+        .thenAccept(this.arguments::putAll)
         .thenAccept((v) -> {
-          ChestInterface.Builder finalFinalBuilder = finalBuilder;
-          finalFinalBuilder = finalFinalBuilder.addTransform(PaperTransform.chestFill(
-              ItemStackElement.of(fillStack)
-          ));
-
-          for (Transform<ChestPane, PlayerViewer> transform : transforms) {
-            finalFinalBuilder = finalFinalBuilder.addTransform(transform);
+          DebugLogger.info("Handling custom transforms: " + customTransforms.size());
+          for (Function<Map<String, Object>, CompletableFuture<Transform<ChestPane, PlayerViewer>>> function : customTransforms) {
+            completableFutures.add(function.apply(arguments)
+                .exceptionally(throwable -> {
+                  DebugLogger.log(
+                      Level.SEVERE,
+                      "Error building GUI" + config.get().getName(),
+                      throwable
+                  );
+                  return (pane, view) -> pane;
+                })
+                .thenAccept(transforms::add));
           }
 
-          DebugLogger.info("Opening gui...");
-          finalFinalBuilder.build().open(PlayerViewer.of(player));
+          CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[]{}))
+              .exceptionally(throwable -> {
+                DebugLogger.log(
+                    Level.SEVERE,
+                    "Error building GUI" + config.get().getName(),
+                    throwable
+                );
+                return null;
+              })
+              .thenAccept((v2) -> {
+                ChestInterface.Builder finalBuilder = builder;
+                finalBuilder = finalBuilder.addTransform(PaperTransform.chestFill(
+                    ItemStackElement.of(fillStack)
+                ));
+
+                for (Transform<ChestPane, PlayerViewer> transform : transforms) {
+                  DebugLogger.info("Adding transform...");
+                  finalBuilder = finalBuilder.addTransform(transform);
+                }
+
+                DebugLogger.info("Opening gui...");
+                finalBuilder.build().open(PlayerViewer.of(player));
+              });
         });
   }
 
@@ -301,11 +350,16 @@ public class ConfigGUI {
     ConfigurationSection bedrockSection = Objects.requireNonNull(
         config.get().getConfigurationSection("bedrock"));
 
+    if (bedrockSection.getString("title") != null) {
+      title = bedrockSection.getString("title");
+    }
+
     SimpleForm.Builder builder = SimpleForm.builder()
-        .title(title)
+        .title(messages.string(title))
         .closedResultHandler(onClose);
 
-    String description = config.get().getString("description");
+
+    String description = bedrockSection.getString("description");
     if (description != null) {
       builder = builder.content(messages.string(description));
     }
@@ -342,6 +396,8 @@ public class ConfigGUI {
       buttonSections = itemSection.getKeys(false)
           .stream()
           .map(itemSection::getConfigurationSection)
+          .filter(Objects::nonNull)
+          .filter(section -> section.getBoolean("bedrock", true))
           .collect(Collectors.toList());
 
       DebugLogger.info("Handling items:" + buttonSections.size());
@@ -505,7 +561,8 @@ public class ConfigGUI {
     private BiFunction<Player, Map<String, Object>, CompletableFuture<List<BedrockGUIElement>>> bedrockTransform;
     private final List<Function<Map<String, Object>, CompletableFuture<Transform<ChestPane, PlayerViewer>>>> transforms = new ArrayList<>();
 
-    private Runnable onClose = () -> {};
+    private Runnable onClose = () -> {
+    };
     private boolean noCloseButton = false;
 
     private Builder(Player player, Config config) {
