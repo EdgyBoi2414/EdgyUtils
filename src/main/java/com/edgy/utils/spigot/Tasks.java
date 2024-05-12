@@ -54,6 +54,12 @@ public class Tasks {
     return task;
   }
 
+  public static BukkitTask runAsyncLater(Runnable runnable, long delay) {
+    BukkitTask task = Bukkit.getScheduler().runTaskLaterAsynchronously(EdgyUtils.bukkit(), runnable, delay);
+    asyncTasks.add(task);
+    return task;
+  }
+
   public static BukkitTask runTimerAsync(Runnable runnable, long delay, long period) {
     BukkitTask task = Bukkit.getScheduler().runTaskTimerAsynchronously(EdgyUtils.bukkit(), runnable, delay, period);
     asyncTasks.add(task);

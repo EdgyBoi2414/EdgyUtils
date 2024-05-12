@@ -1,92 +1,69 @@
-package com.edgy.utils.shared;
+package com.edgy.utils.bungee;
 
 import cloud.commandframework.CommandManager;
 import cloud.commandframework.CommandTree;
 import cloud.commandframework.annotations.AnnotationParser;
+import cloud.commandframework.annotations.processing.CommandContainer;
 import cloud.commandframework.arguments.parser.ParserParameters;
 import cloud.commandframework.arguments.parser.StandardParameters;
-import cloud.commandframework.bukkit.BukkitCommandManager;
+import cloud.commandframework.bungee.BungeeCommandManager;
 import cloud.commandframework.execution.AsynchronousCommandExecutionCoordinator;
 import cloud.commandframework.execution.CommandExecutionCoordinator;
 import cloud.commandframework.meta.CommandMeta;
 import cloud.commandframework.minecraft.extras.AudienceProvider;
 import cloud.commandframework.minecraft.extras.MinecraftExceptionHandler;
-import cloud.commandframework.paper.PaperCommandManager;
 import com.edgy.utils.EdgyUtils;
-import com.edgy.utils.spigot.Paper;
-import java.util.Arrays;
+import com.edgy.utils.shared.DebugLogger;
 import java.util.List;
 import java.util.function.Function;
 import java.util.logging.Level;
 import net.kyori.adventure.audience.Audience;
-import net.kyori.adventure.platform.bukkit.BukkitAudiences;
-import org.bukkit.Bukkit;
-import org.bukkit.command.CommandSender;
+import net.kyori.adventure.platform.bungeecord.BungeeAudiences;
+import net.md_5.bungee.api.CommandSender;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.jetbrains.annotations.NotNull;
 
-public class CloudCommands {
+public class BungeeCloudCommands {
 
-  private final static AbstractCommandContainer<CommandSender, CommandManager<CommandSender>> BUKKIT_DEBUG_CONTAINER = new AbstractCommandContainer<>() {
+  private final static BungeeAbstractCommandContainer<CommandSender, CommandManager<CommandSender>> BUNGEE_DEBUG_CONTAINER = new BungeeAbstractCommandContainer<>() {
     @Override
     protected void registerCommands(CommandManager<CommandSender> commandManager) {
       commandManager.command(
           commandManager.commandBuilder("edgyutils", "eu")
               .literal("debug")
               .senderType(CommandSender.class)
-              .handler(commandContext -> {
+              .handler(context -> {
                 DebugLogger.enabled(!DebugLogger.enabled());
-                commandContext.getSender().sendMessage("Debug mode is now " + (DebugLogger.enabled() ? "enabled" : "disabled"));
+                context.getSender().sendMessage(
+                    "Debug mode is now " + (DebugLogger.enabled() ? "enabled" : "disabled"));
               })
       );
     }
   };
 
-  @SafeVarargs
-  public static void bukkit(
-      AbstractCommandContainer<CommandSender, BukkitCommandManager<CommandSender>>... container
-  ) {
-    bukkit(Arrays.asList(container));
-  }
+  private static CommandManager<CommandSender> commandManager = null;
 
-  public static void bukkit(
-      List<AbstractCommandContainer<CommandSender, BukkitCommandManager<CommandSender>>> containers
-  ) {
+  public static void bungee(
+      List<BungeeAbstractCommandContainer<CommandSender, BungeeCommandManager<CommandSender>>> containers) {
     final Function<CommandTree<CommandSender>, CommandExecutionCoordinator<CommandSender>> executionCoordinatorFunction =
         AsynchronousCommandExecutionCoordinator.<CommandSender>builder().build();
     final Function<CommandSender, CommandSender> mapperFunction = Function.identity();
-    final BukkitCommandManager<CommandSender> commandManager;
+    final BungeeCommandManager<CommandSender> commandManager;
     final AnnotationParser<CommandSender> annotationParser;
-    final BukkitAudiences bukkitAudiences = BukkitAudiences.create(EdgyUtils.bukkit());
+    final BungeeAudiences bungeeAudiences = BungeeAudiences.create(EdgyUtils.bungee());
 
     try {
-      if (Paper.isPaper()) {
-        commandManager = new PaperCommandManager<>(
-            EdgyUtils.bukkit(),
-            executionCoordinatorFunction,
-            mapperFunction,
-            mapperFunction
-        );
-        ((PaperCommandManager<CommandSender>) commandManager).registerAsynchronousCompletions();
-      } else {
-        commandManager = new BukkitCommandManager<>(
-            EdgyUtils.bukkit(),
-            executionCoordinatorFunction,
-            mapperFunction,
-            mapperFunction
-        );
-      }
+      commandManager = new BungeeCommandManager<>(
+          EdgyUtils.bungee(),
+          executionCoordinatorFunction,
+          mapperFunction,
+          mapperFunction
+      );
     } catch (Exception e) {
-      Bukkit.getLogger().log(Level.SEVERE, "Failed to initialize command manager!");
+      EdgyUtils.bungee().getLogger().log(Level.SEVERE, "Failed to initialize command manager!");
       e.printStackTrace();
       return;
     }
-
-    AudienceProvider<CommandSender> audience = new AudienceProvider<CommandSender>() {
-      @Override
-      public @NonNull Audience apply(@NonNull CommandSender sender) {
-        return bukkitAudiences.sender(sender);
-      }
-    };
 
     final Function<ParserParameters, CommandMeta> commandMetaFunction = p ->
         CommandMeta.simple()
@@ -98,6 +75,13 @@ public class CloudCommands {
         commandMetaFunction
     );
 
+    AudienceProvider<CommandSender> audience = new AudienceProvider<>() {
+      @Override
+      public @NonNull Audience apply(@NotNull CommandSender sender) {
+        return bungeeAudiences.sender(sender);
+      }
+    };
+
     new MinecraftExceptionHandler<CommandSender>()
         .withInvalidSyntaxHandler()
         .withInvalidSenderHandler()
@@ -107,19 +91,31 @@ public class CloudCommands {
         .apply(commandManager, audience);
 
     try {
-      annotationParser.parseContainers();
+      boolean parseAll = true;
+      for (BungeeAbstractCommandContainer<CommandSender, BungeeCommandManager<CommandSender>> container : containers) {
+        if (container.getClass().isAnnotationPresent(CommandContainer.class)) {
+          annotationParser.parse(container);
+          parseAll = false;
+        }
+      }
+      if (parseAll) {
+        annotationParser.parseContainers();
+      }
     } catch (Exception e) {
-      Bukkit.getLogger().log(Level.SEVERE, "Failed to parse command containers!");
+      EdgyUtils.bungee().getLogger().log(Level.SEVERE, "Failed to parse command containers!");
       e.printStackTrace();
     }
-    for (AbstractCommandContainer<CommandSender, BukkitCommandManager<CommandSender>> container : containers) {
+
+    for (BungeeAbstractCommandContainer<CommandSender, BungeeCommandManager<CommandSender>> container : containers) {
       container.registerCommands(commandManager);
     }
 
-    BUKKIT_DEBUG_CONTAINER.registerCommands(commandManager);
+    BUNGEE_DEBUG_CONTAINER.registerCommands(commandManager);
+
+    BungeeCloudCommands.commandManager = commandManager;
   }
 
-  public static abstract class AbstractCommandContainer<S, C extends CommandManager<S>> {
+  public static abstract class BungeeAbstractCommandContainer<S, C extends CommandManager<S>> {
 
     protected abstract void registerCommands(C commandManager);
 

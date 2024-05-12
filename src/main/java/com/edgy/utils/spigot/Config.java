@@ -22,15 +22,25 @@ public class Config {
   private YamlConfiguration config;
 
   public Config(String fileName) {
-    this.fileName = fileName;
-    this.configFile = new File(plugin.getDataFolder(), fileName);
-    this.config = loadConfig();
+    this(fileName, false);
   }
 
-  public Config(File file) {
+  public Config(String fileName, boolean holdLoad) {
+    this.fileName = fileName;
+    this.configFile = new File(plugin.getDataFolder(), fileName);
+
+    if (!holdLoad) {
+      this.config = loadConfig();
+    }
+  }
+
+  public Config(File file, boolean holdLoad) {
     this.fileName = file.getName();
     this.configFile = file;
-    this.config = loadConfig();
+
+    if (!holdLoad) {
+      this.config = loadConfig();
+    }
   }
 
   private YamlConfiguration loadConfig() {
@@ -80,7 +90,8 @@ public class Config {
   public Location getLocation(String path) {
     ConfigurationSection section = config.getConfigurationSection(path);
     if (section == null) {
-      throw new RuntimeException(new InvalidConfigurationException("Location section " + path + " is missing!"));
+      throw new RuntimeException(
+          new InvalidConfigurationException("Location section " + path + " is missing!"));
     }
 
     return new Location(

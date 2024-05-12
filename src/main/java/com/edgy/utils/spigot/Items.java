@@ -7,10 +7,12 @@ import com.edgy.utils.spigot.tinyprotocol.Reflection;
 import com.edgy.utils.spigot.tinyprotocol.Reflection.FieldAccessor;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -134,6 +136,21 @@ public class Items {
         List<String> lore
     ) {
       meta.setLore(lore.stream().map(messages::string).collect(Collectors.toList()));
+      return this;
+    }
+
+    public ItemBuilder appendLore(
+        List<String> lore
+    ) {
+      if (!meta.hasLore()) {
+        return lore(lore);
+      }
+
+      assert meta.getLore() != null;
+      List<String> loreList = new ArrayList<>(meta.getLore());
+      loreList.addAll(lore.stream().map(messages::string).collect(Collectors.toList()));
+      meta.setLore(loreList);
+
       return this;
     }
 

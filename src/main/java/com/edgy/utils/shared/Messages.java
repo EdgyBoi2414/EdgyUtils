@@ -4,8 +4,11 @@ import com.edgy.utils.EdgyUtils;
 import java.io.File;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +21,10 @@ import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.Tag;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.jetbrains.annotations.Nullable;
@@ -26,6 +32,8 @@ import org.jetbrains.annotations.Nullable;
 public class Messages<S> {
 
   private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
+  private static final String[] ALPHABET = "abcdefghijklmnopqrstuvwxyz".split("");
+  private static final String[] SMALL_CAPS_ALPHABET = "\u1D00\u0299\u1D04\u1D05\u1D07\uA730\u0262\u029C\u026A\u1D0A\u1D0B\u029F\u1D0D\u0274\u1D0F\u1D18q\u0280\uA731\u1D1B\u1D1C\u1D20\u1D21x\u028F\u1D22".split("");
   private final Function<S, Audience> audienceProvider;
   private ResourceBundle MESSAGES;
   private final boolean legacy;
@@ -75,7 +83,8 @@ public class Messages<S> {
     sendMessage(senders, key, args, null);
   }
 
-  public void sendMessage(Collection<? extends S> senders, String key, Map<String, Object> args, @Nullable Sound sound) {
+  public void sendMessage(Collection<? extends S> senders, String key, Map<String, Object> args,
+      @Nullable Sound sound) {
     for (S sender : senders) {
       sendMessage(sender, key, args, sound);
     }
@@ -99,6 +108,12 @@ public class Messages<S> {
     if (sound != null) {
       audience.playSound(sound);
     }
+  }
+
+  public List<String> stringList(String... lines) {
+    return Arrays.stream(lines)
+        .map(line -> LegacyComponentSerializer.legacySection().serialize(component(line)))
+        .collect(Collectors.toList());
   }
 
   public List<String> stringList(String key) {
@@ -181,11 +196,89 @@ public class Messages<S> {
       return LegacyComponentSerializer.legacyAmpersand().deserialize(message);
     }
 
-    return MINI_MESSAGE.deserialize(message);
+    return MINI_MESSAGE.deserialize(
+        message,
+        TagResolver.resolver("sm_caps", (argumentQueue, context) -> {
+              final String text = argumentQueue.popOr("No text provided").value();
+              return Tag.inserting(context.deserialize(toSmallCaps(text)));
+            }
+        )
+    );
   }
 
   public void playSound(S sender, Sound sound) {
     audienceProvider.apply(sender).playSound(sound);
+  }
+
+  public void title(S sender, String title, String subtitle, Map<String, Object> args, int fadeIn,
+      int stay, int fadeOut) {
+    title(Collections.singletonList(sender), title, subtitle, args, fadeIn, stay, fadeOut);
+  }
+
+  public void title(Collection<? extends S> senders, String title, String subtitle,
+      Map<String, Object> args, int fadeIn,
+      int stay, int fadeOut) {
+    Title kyoriTitle = Title.title(
+        component(title, args),
+        component(subtitle, args),
+        Title.Times.times(
+            Duration.of(fadeIn, ChronoUnit.SECONDS),
+            Duration.of(stay, ChronoUnit.SECONDS),
+            Duration.of(fadeOut, ChronoUnit.SECONDS)
+        )
+    );
+
+    for (S sender : senders) {
+      title(sender, kyoriTitle);
+    }
+  }
+
+  private void title(S sender, Title title) {
+    audienceProvider.apply(sender).showTitle(title);
+  }
+
+  public static String toSmallCaps(String text) {
+    text = text.toLowerCase();
+    StringBuilder convertedBuilder = new StringBuilder();
+    boolean ignoringNextChar = false;
+    for (char textCharacter : text.toCharArray()) {
+      int index = 0;
+      boolean successfullyTranslated = false;
+      if (textCharacter == '&' || textCharacter == '\u00A7') {
+        ignoringNextChar = true;
+        convertedBuilder.append(textCharacter);
+        continue;
+      }
+      if (ignoringNextChar) {
+        ignoringNextChar = false;
+        convertedBuilder.append(textCharacter);
+
+        continue;
+      }
+      for (String alphabetLetter : ALPHABET) {
+        if ((textCharacter + "").equals(alphabetLetter)) {
+          convertedBuilder.append(SMALL_CAPS_ALPHABET[index]);
+          successfullyTranslated = true;
+          break;
+        }
+
+        index++;
+      }
+
+      if (!successfullyTranslated) {
+        convertedBuilder.append(textCharacter);
+      }
+    }
+
+    return convertedBuilder.toString();
+  }
+
+  public Audience audience(S sender) {
+    return audienceProvider.apply(sender);
+  }
+
+  public Audience audience(Collection<? extends S> senders) {
+    return Audience.audience(senders.stream().map(audienceProvider).collect(Collectors.toList()));
   }
 
 }

@@ -1,45 +1,44 @@
-package com.edgy.utils.spigot;
+package com.edgy.utils.bungee;
 
-import cloud.commandframework.bukkit.BukkitCommandManager;
+import cloud.commandframework.bungee.BungeeCommandManager;
 import com.edgy.utils.EdgyUtils;
+import com.edgy.utils.bungee.BungeeCloudCommands.BungeeAbstractCommandContainer;
+import com.edgy.utils.spigot.CloudCommands;
 import com.edgy.utils.spigot.CloudCommands.AbstractCommandContainer;
 import com.edgy.utils.shared.Manager;
 import com.edgy.utils.shared.Messages;
-import com.edgy.utils.spigot.listener.OnlinePlayerCollectionListener;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
-import org.bukkit.command.CommandSender;
-import org.bukkit.event.Listener;
-import org.bukkit.plugin.java.JavaPlugin;
+import net.md_5.bungee.api.CommandSender;
+import net.md_5.bungee.api.plugin.Listener;
+import net.md_5.bungee.api.plugin.Plugin;
 
-public abstract class BukkitPlugin extends JavaPlugin {
+public abstract class BungeePlugin extends Plugin {
 
   private final List<Manager> managers = new ArrayList<>();
+
   private Messages<CommandSender> messages;
 
   @Override
-  public final void onEnable() {
-    EdgyUtils.initializeBukkit(this);
+  public void onEnable() {
+    EdgyUtils.initializeBungee(this);
 
     try {
       messages = setupMessages();
       managers.addAll(setupManagers());
-      CloudCommands.bukkit(setupCommands());
+      BungeeCloudCommands.bungee(setupCommands());
       for (Listener listener : setupListeners()) {
-        getServer().getPluginManager().registerEvents(listener, this);
+        getProxy().getPluginManager().registerListener(this, listener);
       }
-
-      getServer().getPluginManager().registerEvents(new OnlinePlayerCollectionListener(), this);
     } catch (Exception err) {
       err.printStackTrace();
-      getServer().getPluginManager().disablePlugin(this);
     }
   }
 
   @Override
   public void onDisable() {
-    Tasks.clearAsyncs();
+    BungeeTasks.clearAsyncs();
   }
 
   public final int reload() {
@@ -72,14 +71,10 @@ public abstract class BukkitPlugin extends JavaPlugin {
     return messages;
   }
 
-
-  protected List<AbstractCommandContainer<CommandSender, BukkitCommandManager<CommandSender>>> setupCommands() {
+  protected List<BungeeAbstractCommandContainer<CommandSender, BungeeCommandManager<CommandSender>>> setupCommands() {
     return new ArrayList<>();
   }
-
   protected abstract Messages<CommandSender> setupMessages();
-
   protected abstract List<Manager> setupManagers();
   protected abstract List<Listener> setupListeners();
-
 }
