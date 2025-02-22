@@ -1,0 +1,3 @@
+name: EdgyUtils
+main: com.edgy.utils.bungee.MainBungee
+version: 1.0.0

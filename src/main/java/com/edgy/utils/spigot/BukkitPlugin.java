@@ -53,7 +53,7 @@ public abstract class BukkitPlugin extends JavaPlugin {
       }
     }
 
-    messages.reload(getDataFolder(), messages.getMessagesFile());
+    messages.reload(getDataFolder(), messages.getMessagesFile(), provideClassLoader());
 
     return fails;
   }
@@ -81,5 +81,6 @@ public abstract class BukkitPlugin extends JavaPlugin {
 
   protected abstract List<Manager> setupManagers();
   protected abstract List<Listener> setupListeners();
+  protected abstract ClassLoader provideClassLoader();
 
 }

@@ -23,9 +23,6 @@
  */
 package com.edgy.utils.spigot.fastboard;
 
-import java.lang.reflect.Method;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
@@ -37,29 +34,17 @@ import java.util.Objects;
 /**
  * {@inheritDoc}
  */
-public class FastBoard extends FastBoardBase<Component> {
+public class FastBoard extends FastBoardBase<String> {
 
-    private static final MethodHandle COMPONENT_METHOD;
-    private static final Object EMPTY_COMPONENT;
-    private static final boolean ADVENTURE_SUPPORT;
+    private static final MethodHandle MESSAGE_FROM_STRING;
+    private static final Object EMPTY_MESSAGE;
 
     static {
-        ADVENTURE_SUPPORT = FastReflection
-            .optionalClass("io.papermc.paper.adventure.PaperAdventure")
-            .isPresent();
-        MethodHandles.Lookup lookup = MethodHandles.lookup();
-
         try {
-            if (ADVENTURE_SUPPORT) {
-                Class<?> paperAdventure = Class.forName("io.papermc.paper.adventure.PaperAdventure");
-                Method method = paperAdventure.getDeclaredMethod("asVanilla", Component.class);
-                COMPONENT_METHOD = lookup.unreflect(method);
-                EMPTY_COMPONENT = COMPONENT_METHOD.invoke(Component.empty());
-            } else {
-                Class<?> craftChatMessageClass = FastReflection.obcClass("util.CraftChatMessage");
-                COMPONENT_METHOD = lookup.unreflect(craftChatMessageClass.getMethod("fromString", String.class));
-                EMPTY_COMPONENT = Array.get(COMPONENT_METHOD.invoke(""), 0);
-            }
+            MethodHandles.Lookup lookup = MethodHandles.lookup();
+            Class<?> craftChatMessageClass = FastReflection.obcClass("util.CraftChatMessage");
+            MESSAGE_FROM_STRING = lookup.unreflect(craftChatMessageClass.getMethod("fromString", String.class));
+            EMPTY_MESSAGE = Array.get(MESSAGE_FROM_STRING.invoke(""), 0);
         } catch (Throwable t) {
             throw new ExceptionInInitializerError(t);
         }
@@ -76,36 +61,101 @@ public class FastBoard extends FastBoardBase<Component> {
      * {@inheritDoc}
      */
     @Override
+    public void updateTitle(String title) {
+        Objects.requireNonNull(title, "title");
+
+        if (!VersionType.V1_13.isHigherOrEqual() && title.length() > 32) {
+            throw new IllegalArgumentException("Title is longer than 32 chars");
+        }
+
+        super.updateTitle(title);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void updateLines(String... lines) {
+        Objects.requireNonNull(lines, "lines");
+
+        if (!VersionType.V1_13.isHigherOrEqual()) {
+            int lineCount = 0;
+            for (String s : lines) {
+                if (s != null && s.length() > 30) {
+                    throw new IllegalArgumentException("Line " + lineCount + " is longer than 30 chars");
+                }
+                lineCount++;
+            }
+        }
+
+        super.updateLines(lines);
+    }
+
+    @Override
     protected void sendLineChange(int score) throws Throwable {
-        Component line = getLineByScore(score);
+        int maxLength = hasLinesMaxLength() ? 16 : 1024;
+        String line = getLineByScore(score);
+        String prefix;
+        String suffix = "";
 
-        sendTeamPacket(score, FastBoardBase.TeamMode.UPDATE, line, null);
-    }
+        if (line == null || line.isEmpty()) {
+            prefix = COLOR_CODES[score] + ChatColor.RESET;
+        } else if (line.length() <= maxLength) {
+            prefix = line;
+        } else {
+            // Prevent splitting color codes
+            int index = line.charAt(maxLength - 1) == ChatColor.COLOR_CHAR
+                    ? (maxLength - 1) : maxLength;
+            prefix = line.substring(0, index);
+            String suffixTmp = line.substring(index);
+            ChatColor chatColor = null;
 
-    @Override
-    protected Object toMinecraftComponent(Component component) throws Throwable {
-        if (component == null) {
-            return EMPTY_COMPONENT;
+            if (suffixTmp.length() >= 2 && suffixTmp.charAt(0) == ChatColor.COLOR_CHAR) {
+                chatColor = ChatColor.getByChar(suffixTmp.charAt(1));
+            }
+
+            String color = ChatColor.getLastColors(prefix);
+            boolean addColor = chatColor == null || chatColor.isFormat();
+
+            suffix = (addColor ? (color.isEmpty() ? ChatColor.RESET.toString() : color) : "") + suffixTmp;
         }
 
-        // If the server isn't running adventure natively, we convert the component to legacy text
-        // and then to a Minecraft chat component
-        if (!ADVENTURE_SUPPORT) {
-            String legacy = serializeLine(component);
-
-            return Array.get(COMPONENT_METHOD.invoke(legacy), 0);
+        if (prefix.length() > maxLength || suffix.length() > maxLength) {
+            // Something went wrong, just cut to prevent client crash/kick
+            prefix = prefix.substring(0, Math.min(maxLength, prefix.length()));
+            suffix = suffix.substring(0, Math.min(maxLength, suffix.length()));
         }
 
-        return COMPONENT_METHOD.invoke(component);
+        sendTeamPacket(score, TeamMode.UPDATE, prefix, suffix);
     }
 
     @Override
-    protected String serializeLine(Component value) {
-        return LegacyComponentSerializer.legacySection().serialize(value);
+    protected Object toMinecraftComponent(String line) throws Throwable {
+        if (line == null || line.isEmpty()) {
+            return EMPTY_MESSAGE;
+        }
+
+        return Array.get(MESSAGE_FROM_STRING.invoke(line), 0);
     }
 
     @Override
-    protected Component emptyLine() {
-        return Component.empty();
+    protected String serializeLine(String value) {
+        return value;
+    }
+
+    @Override
+    protected String emptyLine() {
+        return "";
+    }
+
+    /**
+     * Return if the player has a prefix/suffix characters limit.
+     * By default, it returns true only in 1.12 or lower.
+     * This method can be overridden to fix compatibility with some versions support plugin.
+     *
+     * @return max length
+     */
+    protected boolean hasLinesMaxLength() {
+        return !VersionType.V1_13.isHigherOrEqual();
     }
 }

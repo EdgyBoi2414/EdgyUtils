@@ -1,2 +1,10 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+    }
+}
+
+
 rootProject.name = 'EdgyUtils'
+
 

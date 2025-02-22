@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -16,6 +17,12 @@ public class OnlinePlayerMap<T> {
     private static final List<OnlinePlayerMap<?>> activePlayerMaps = new ArrayList<>();
 
     private final HashMap<UUID, T> map = new HashMap<>();
+    private Consumer<T> onQuit = (value) -> {};
+
+    public OnlinePlayerMap(Consumer<T> onQuit) {
+        super();
+        this.onQuit = onQuit;
+    }
 
     public OnlinePlayerMap() {
         activePlayerMaps.add(this);
@@ -23,6 +30,12 @@ public class OnlinePlayerMap<T> {
 
     public static List<OnlinePlayerMap<?>> getActivePlayerMaps() {
         return activePlayerMaps;
+    }
+
+    public void handleQuit(Player player) {
+        T value = map.get(player.getUniqueId());
+        if (value == null) return;
+        onQuit.accept(value);
     }
 
     public T put(Player player, T value) {

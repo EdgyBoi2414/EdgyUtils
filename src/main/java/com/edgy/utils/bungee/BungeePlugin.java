@@ -3,8 +3,7 @@ package com.edgy.utils.bungee;
 import cloud.commandframework.bungee.BungeeCommandManager;
 import com.edgy.utils.EdgyUtils;
 import com.edgy.utils.bungee.BungeeCloudCommands.BungeeAbstractCommandContainer;
-import com.edgy.utils.spigot.CloudCommands;
-import com.edgy.utils.spigot.CloudCommands.AbstractCommandContainer;
+import com.edgy.utils.bungee.listeners.OnlineProxiedPlayerCollectionListener;
 import com.edgy.utils.shared.Manager;
 import com.edgy.utils.shared.Messages;
 import java.util.ArrayList;
@@ -31,8 +30,10 @@ public abstract class BungeePlugin extends Plugin {
       for (Listener listener : setupListeners()) {
         getProxy().getPluginManager().registerListener(this, listener);
       }
+
+      getProxy().getPluginManager().registerListener(this, new OnlineProxiedPlayerCollectionListener());
     } catch (Exception err) {
-      err.printStackTrace();
+      getLogger().log(Level.SEVERE, "Error while enabling plugin", err);
     }
   }
 
@@ -52,7 +53,7 @@ public abstract class BungeePlugin extends Plugin {
       }
     }
 
-    messages.reload(getDataFolder(), messages.getMessagesFile());
+    messages.reload(getDataFolder(), messages.getMessagesFile(), provideClassLoader());
 
     return fails;
   }
@@ -77,4 +78,5 @@ public abstract class BungeePlugin extends Plugin {
   protected abstract Messages<CommandSender> setupMessages();
   protected abstract List<Manager> setupManagers();
   protected abstract List<Listener> setupListeners();
+  protected abstract ClassLoader provideClassLoader();
 }

@@ -12,13 +12,13 @@ import java.util.logging.Logger;
 
 public class ResourceUtils {
 
-  public static void saveResource(File dataFolder, String resourcePath) {
+  public static void saveResource(File dataFolder, String resourcePath, ClassLoader classLoader) {
     if (resourcePath == null || resourcePath.equals("")) {
       throw new IllegalArgumentException("Resource path cannot be null or empty");
     }
 
     resourcePath = resourcePath.replace('\\', '/');
-    InputStream in = getResource(resourcePath);
+    InputStream in = getResource(resourcePath, classLoader);
     if (in == null) {
       throw new IllegalArgumentException("The embedded resource '" + resourcePath + "' cannot be found!");
     }
@@ -47,13 +47,13 @@ public class ResourceUtils {
     }
   }
 
-  public static InputStream getResource(String filename) {
+  public static InputStream getResource(String filename, ClassLoader classLoader) {
     if (filename == null) {
       throw new IllegalArgumentException("Filename cannot be null");
     }
 
     try {
-      URL url = ResourceUtils.class.getClassLoader().getResource(filename);
+      URL url = classLoader.getResource(filename);
 
       if (url == null) {
         return null;

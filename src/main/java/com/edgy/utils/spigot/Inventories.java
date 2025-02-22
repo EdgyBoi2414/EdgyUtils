@@ -15,4 +15,15 @@ public class Inventories {
     return -1;
   }
 
+  public static int getEmptySlots(Inventory inventory) {
+    int emptySlots = 0;
+    for (int i = 0; i < inventory.getSize(); i++) {
+      ItemStack item = inventory.getItem(i);
+      if (item == null || item.getType().isAir()) {
+        emptySlots++;
+      }
+    }
+    return emptySlots;
+  }
+
 }

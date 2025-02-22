@@ -1,0 +1,3 @@
+name: EdgyUtils
+main: com.edgy.utils.spigot.MainBukkit
+version: 1.0.0

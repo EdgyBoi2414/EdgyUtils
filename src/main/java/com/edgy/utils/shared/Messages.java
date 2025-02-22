@@ -39,29 +39,30 @@ public class Messages<S> {
   private final boolean legacy;
   private final String messagesFile;
 
-  public Messages(Function<S, Audience> audienceProvider, File dataFolder, String messagesFile) {
-    this(audienceProvider, dataFolder, messagesFile, false);
+  public Messages(Function<S, Audience> audienceProvider, File dataFolder, String messagesFile, ClassLoader classLoader) {
+    this(audienceProvider, dataFolder, messagesFile, classLoader, false);
   }
 
   public Messages(
       Function<S, Audience> audienceProvider,
       File dataFolder,
       String messagesFile,
+      ClassLoader classLoader,
       boolean legacy
   ) {
     this.audienceProvider = audienceProvider;
     this.messagesFile = messagesFile;
     this.legacy = legacy;
 
-    reload(dataFolder, messagesFile);
+    reload(dataFolder, messagesFile, classLoader);
   }
 
   public String getMessagesFile() {
     return messagesFile;
   }
 
-  public void reload(File dataFolder, String messagesFile) {
-    ResourceUtils.saveResource(dataFolder, messagesFile);
+  public void reload(File dataFolder, String messagesFile, ClassLoader classLoader) {
+    ResourceUtils.saveResource(dataFolder, messagesFile, classLoader);
     try (InputStream stream = Files.newInputStream(
         new File(dataFolder, messagesFile).toPath())) {
       MESSAGES = new PropertyResourceBundle(stream);
@@ -144,6 +145,12 @@ public class Messages<S> {
     }
 
     return Arrays.stream(message.split("<n>"))
+        .map(this::component)
+        .collect(Collectors.toList());
+  }
+
+  public List<Component> componentListFromStrings(String... lines) {
+    return Arrays.stream(lines)
         .map(this::component)
         .collect(Collectors.toList());
   }
