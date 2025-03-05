@@ -59,4 +59,14 @@ public class RedisConfiguration {
 
   /*----------------------------------------------------------------------------------------------------------*/
 
+  @Override
+  public String toString() {
+    return "RedisConfiguration{" +
+            "hostName='" + hostName + '\'' +
+            ", port=" + port +
+            ", username='" + username + '\'' +
+            ", password='" + password + '\'' +
+            ", ssl=" + ssl +
+            '}';
+  }
 }

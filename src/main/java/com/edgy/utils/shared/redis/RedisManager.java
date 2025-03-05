@@ -142,7 +142,7 @@ public class RedisManager {
     }
 
     this.plugin.logger()
-        .info("Jedis Pool established with server identifier '" + this.serverIdentifier + "'!");
+        .info("Establishing redis connection " + redisConfiguration.toString() + " with server identifier '" + this.serverIdentifier + "'!");
 
     // If channels were provided, add them to the list and subscribe to them
     if (channels != null && channels.length > 0) {
