@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.logging.Level;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.platform.bungeecord.BungeeAudiences;
+import net.kyori.adventure.text.format.NamedTextColor;
 import net.md_5.bungee.api.CommandSender;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.incendo.cloud.CommandManager;
@@ -70,13 +71,16 @@ public class BungeeCloudCommands {
                     component ->
                             EdgyUtils.bungee()
                                     .messages()
-                                    .component("<red><sm_caps:error> <dark_grey>→ <white>"))
+                                    .component("<red><bold><sm_caps:error></bold> <dark_grey>→ <white>")
+                                    .append(component.color(NamedTextColor.WHITE)))
             .registerTo(commandManager);
 
+    String containerName = "Unknown";
     try {
       boolean parseAll = true;
       for (BungeeAbstractCommandContainer<CommandSender, BungeeCommandManager<CommandSender>> container : containers) {
         if (container.getClass().isAnnotationPresent(CommandContainer.class)) {
+          containerName = container.getClass().getSimpleName();
           annotationParser.parse(container);
           parseAll = false;
         }
@@ -85,7 +89,7 @@ public class BungeeCloudCommands {
         annotationParser.parseContainers();
       }
     } catch (Exception err) {
-      EdgyUtils.logger().log(Level.SEVERE, "Failed to parse command containers!", err);
+      EdgyUtils.logger().log(Level.SEVERE, "Failed to parse command containers! Bad Container: " + containerName, err);
     }
 
     for (BungeeAbstractCommandContainer<CommandSender, BungeeCommandManager<CommandSender>> container : containers) {

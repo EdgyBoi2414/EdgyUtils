@@ -84,6 +84,5 @@ shadowJar {
     getArchiveVersion().set(null)
     getArchiveFileName().set("${rootProject.name}-${rootProject.version}.jar")
     duplicatesStrategy(DuplicatesStrategy.INCLUDE)
-    minimize();
 }
 

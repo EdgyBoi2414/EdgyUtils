@@ -139,13 +139,16 @@ public class CloudCommands {
             component ->
                 EdgyUtils.bukkit()
                     .messages()
-                    .component("<red><sm_caps:error> <dark_grey>→ <white>"))
+                    .component("<red><bold><sm_caps:error></bold> <dark_grey>→ <white>")
+                        .append(component.color(NamedTextColor.WHITE)))
         .registerTo(commandManager);
 
+    String containerName = "Unknown";
     try {
       boolean parseAll = true;
       for (AbstractCommandContainer<Source, PaperCommandManager<Source>> container : containers) {
         if (container.getClass().isAnnotationPresent(CommandContainer.class)) {
+          containerName = container.getClass().getSimpleName();
           annotationParser.parse(container);
           parseAll = false;
         }
@@ -155,7 +158,7 @@ public class CloudCommands {
         annotationParser.parseContainers();
       }
     } catch (Exception err) {
-      EdgyUtils.logger().log(Level.SEVERE, "Failed to parse command containers!", err);
+      EdgyUtils.logger().log(Level.SEVERE, "Failed to parse command containers! Bad Container: " + containerName, err);
     }
 
     for (AbstractCommandContainer<Source, PaperCommandManager<Source>> container : containers) {
