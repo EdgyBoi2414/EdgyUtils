@@ -1,6 +1,5 @@
 package com.edgy.utils.spigot;
 
-import cloud.commandframework.bukkit.BukkitCommandManager;
 import com.edgy.utils.EdgyUtils;
 import com.edgy.utils.spigot.CloudCommands.AbstractCommandContainer;
 import com.edgy.utils.shared.Manager;
@@ -12,6 +11,8 @@ import java.util.logging.Level;
 import org.bukkit.command.CommandSender;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.incendo.cloud.paper.PaperCommandManager;
+import org.incendo.cloud.paper.util.sender.Source;
 
 public abstract class BukkitPlugin extends JavaPlugin {
 
@@ -73,7 +74,7 @@ public abstract class BukkitPlugin extends JavaPlugin {
   }
 
 
-  protected List<AbstractCommandContainer<CommandSender, BukkitCommandManager<CommandSender>>> setupCommands() {
+  protected List<AbstractCommandContainer<Source, PaperCommandManager<Source>>> setupCommands() {
     return new ArrayList<>();
   }
 

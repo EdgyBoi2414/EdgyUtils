@@ -1,6 +1,5 @@
 package com.edgy.utils.bungee;
 
-import cloud.commandframework.bungee.BungeeCommandManager;
 import com.edgy.utils.EdgyUtils;
 import com.edgy.utils.bungee.BungeeCloudCommands.BungeeAbstractCommandContainer;
 import com.edgy.utils.bungee.listeners.OnlineProxiedPlayerCollectionListener;
@@ -12,6 +11,7 @@ import java.util.logging.Level;
 import net.md_5.bungee.api.CommandSender;
 import net.md_5.bungee.api.plugin.Listener;
 import net.md_5.bungee.api.plugin.Plugin;
+import org.incendo.cloud.bungee.BungeeCommandManager;
 
 public abstract class BungeePlugin extends Plugin {
 

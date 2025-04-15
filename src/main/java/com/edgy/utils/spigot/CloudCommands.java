@@ -1,68 +1,100 @@
 package com.edgy.utils.spigot;
 
-import cloud.commandframework.CommandManager;
-import cloud.commandframework.CommandTree;
-import cloud.commandframework.annotations.AnnotationParser;
-import cloud.commandframework.annotations.processing.CommandContainer;
-import cloud.commandframework.arguments.parser.ParserParameters;
-import cloud.commandframework.arguments.parser.StandardParameters;
-import cloud.commandframework.arguments.standard.StringArgument;
-import cloud.commandframework.bukkit.BukkitCommandManager;
-import cloud.commandframework.execution.AsynchronousCommandExecutionCoordinator;
-import cloud.commandframework.execution.CommandExecutionCoordinator;
-import cloud.commandframework.meta.CommandMeta;
-import cloud.commandframework.minecraft.extras.AudienceProvider;
-import cloud.commandframework.minecraft.extras.MinecraftExceptionHandler;
-import cloud.commandframework.paper.PaperCommandManager;
 import com.edgy.utils.EdgyUtils;
 import com.edgy.utils.shared.DebugLogger;
 import com.edgy.utils.shared.Messages;
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.Function;
+import java.util.Objects;
 import java.util.logging.Level;
+
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.platform.bukkit.BukkitAudiences;
-import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
-import org.bukkit.Bukkit;
-import org.bukkit.command.CommandSender;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.incendo.cloud.CommandManager;
+import org.incendo.cloud.annotations.AnnotationParser;
+import org.incendo.cloud.annotations.processing.CommandContainer;
+import org.incendo.cloud.component.DefaultValue;
+import org.incendo.cloud.description.Description;
+import org.incendo.cloud.execution.ExecutionCoordinator;
+import org.incendo.cloud.minecraft.extras.AudienceProvider;
+import org.incendo.cloud.minecraft.extras.MinecraftExceptionHandler;
+import org.incendo.cloud.minecraft.extras.MinecraftHelp;
+import org.incendo.cloud.paper.PaperCommandManager;
+import org.incendo.cloud.paper.util.sender.PaperSimpleSenderMapper;
+import org.incendo.cloud.paper.util.sender.Source;
+
+import static net.kyori.adventure.text.Component.text;
+import static org.incendo.cloud.parser.standard.StringParser.greedyStringParser;
 
 public class CloudCommands {
 
-  private final static AbstractCommandContainer<CommandSender, CommandManager<CommandSender>> BUKKIT_DEBUG_CONTAINER = new AbstractCommandContainer<>() {
+  private final static BukkitAudiences BUKKIT_AUDIENCES = BukkitAudiences.create(EdgyUtils.bukkit());
+  private final static AudienceProvider<Source> AUDIENCE_PROVIDER = new AudienceProvider<>() {
     @Override
-    protected void registerCommands(CommandManager<CommandSender> commandManager) {
+    public @NonNull Audience apply(@NonNull Source source) {
+      return BUKKIT_AUDIENCES.sender(source.source());
+    }
+  };
+
+  private final static AbstractCommandContainer<Source, PaperCommandManager<Source>> PAPER_DEFAULT_CONTAINER = new AbstractCommandContainer<>() {
+    @Override
+    protected void registerCommands(PaperCommandManager<Source> commandManager) {
+
+      MinecraftHelp<Source> help = MinecraftHelp.<Source>builder()
+              .commandManager(commandManager)
+              .audienceProvider(AUDIENCE_PROVIDER)
+              .commandPrefix("help")
+              .colors(MinecraftHelp.helpColors(
+                      Objects.requireNonNull(TextColor.fromHexString("#FF0000")),
+                      NamedTextColor.WHITE,
+                      Objects.requireNonNull(TextColor.fromHexString("#FF0000")),
+                      NamedTextColor.GRAY,
+                      NamedTextColor.DARK_GRAY
+              ))
+              .build();
+
       commandManager.command(
-          commandManager.commandBuilder("edgyutils", "eu")
+              commandManager.commandBuilder("help")
+                      .optional("query", greedyStringParser(), DefaultValue.constant(""))
+                      .handler(context -> {
+                        help.queryCommands(context.get("query"), context.sender());
+                      })
+      );
+
+      commandManager.command(
+          commandManager.commandBuilder("edgyutils", "eu", "utils")
               .literal("debug")
-              .senderType(CommandSender.class)
+              .senderType(Source.class)
               .handler(context -> {
                 DebugLogger.enabled(!DebugLogger.enabled());
-                context.getSender().sendMessage(
+                context.sender().source().sendMessage(
                     "Debug mode is now " + (DebugLogger.enabled() ? "enabled" : "disabled"));
               })
       );
 
       commandManager.command(
-          commandManager.commandBuilder("edgyutils", "eu")
+          commandManager.commandBuilder("edgyutils", "eu", "utils")
               .literal("smallcaps")
-              .senderType(CommandSender.class)
-              .argument(StringArgument.of("text"))
+              .senderType(Source.class)
+              .required("text", greedyStringParser(), Description.of("Text to convert to small caps"))
               .handler(context -> {
                 String text = context.get("text");
 
-                TextComponent.Builder builder = Component.text();
-                builder.append(Component.text(Messages.toSmallCaps(text))
-                    .append(Component.text(" [Click to Copy]").color(
+                TextComponent.Builder builder = text();
+                builder.append(text(Messages.toSmallCaps(text))
+                    .append(text(" [Click to Copy]").color(
                         TextColor.color(0x1B1B1B))));
                 builder.clickEvent(ClickEvent.copyToClipboard(Messages.toSmallCaps(text)));
-                builder.hoverEvent(HoverEvent.showText(Component.text("Click to copy")));
-                EdgyUtils.bukkit().messages().audience(context.getSender())
+                builder.hoverEvent(HoverEvent.showText(text("Click to copy")));
+                EdgyUtils.bukkit()
+                        .messages()
+                        .audience(context.sender().source())
                     .sendMessage(builder.build());
               })
       );
@@ -71,80 +103,48 @@ public class CloudCommands {
 
 
 
-  private static CommandManager<CommandSender> commandManager = null;
+  private static PaperCommandManager<Source> commandManager = null;
 
-  public static CommandManager<CommandSender> commandManager() {
+  public static PaperCommandManager<Source> commandManager() {
     return commandManager;
   }
 
   @SafeVarargs
   public static void bukkit(
-      AbstractCommandContainer<CommandSender, BukkitCommandManager<CommandSender>>... container
+      AbstractCommandContainer<Source, PaperCommandManager<Source>>... container
   ) {
     bukkit(Arrays.asList(container));
   }
 
   public static void bukkit(
-      List<AbstractCommandContainer<CommandSender, BukkitCommandManager<CommandSender>>> containers
+      List<AbstractCommandContainer<Source, PaperCommandManager<Source>>> containers
   ) {
-    final Function<CommandTree<CommandSender>, CommandExecutionCoordinator<CommandSender>> executionCoordinatorFunction =
-        AsynchronousCommandExecutionCoordinator.<CommandSender>builder().build();
-    final Function<CommandSender, CommandSender> mapperFunction = Function.identity();
-    final BukkitCommandManager<CommandSender> commandManager;
-    final AnnotationParser<CommandSender> annotationParser;
-    final BukkitAudiences bukkitAudiences = BukkitAudiences.create(EdgyUtils.bukkit());
+    final PaperCommandManager<Source> commandManager;
+    final AnnotationParser<Source> annotationParser;
 
     try {
-      if (Paper.isPaper()) {
-        commandManager = new PaperCommandManager<>(
-            EdgyUtils.bukkit(),
-            executionCoordinatorFunction,
-            mapperFunction,
-            mapperFunction
-        );
-        ((PaperCommandManager<CommandSender>) commandManager).registerAsynchronousCompletions();
-      } else {
-        commandManager = new BukkitCommandManager<>(
-            EdgyUtils.bukkit(),
-            executionCoordinatorFunction,
-            mapperFunction,
-            mapperFunction
-        );
-      }
-    } catch (Exception e) {
-      Bukkit.getLogger().log(Level.SEVERE, "Failed to initialize command manager!");
-      e.printStackTrace();
+      commandManager = PaperCommandManager.builder(PaperSimpleSenderMapper.simpleSenderMapper())
+              .executionCoordinator(ExecutionCoordinator.simpleCoordinator())
+              .buildOnEnable(EdgyUtils.bukkit());
+    } catch (Exception err) {
+      EdgyUtils.logger().log(Level.SEVERE, "Failed to initialize command manager!", err);
       return;
     }
 
-    AudienceProvider<CommandSender> audience = new AudienceProvider<>() {
-      @Override
-      public @NonNull Audience apply(@NonNull CommandSender sender) {
-        return bukkitAudiences.sender(sender);
-      }
-    };
+    annotationParser = new AnnotationParser<>(commandManager, Source.class);
 
-    final Function<ParserParameters, CommandMeta> commandMetaFunction = p ->
-        CommandMeta.simple()
-            .with(CommandMeta.DESCRIPTION, p.get(StandardParameters.DESCRIPTION, "No description"))
-            .build();
-    annotationParser = new AnnotationParser<>(
-        commandManager,
-        CommandSender.class,
-        commandMetaFunction
-    );
-
-    new MinecraftExceptionHandler<CommandSender>()
-        .withInvalidSyntaxHandler()
-        .withInvalidSenderHandler()
-        .withNoPermissionHandler()
-        .withArgumentParsingHandler()
-        .withCommandExecutionHandler()
-        .apply(commandManager, audience);
+    MinecraftExceptionHandler.create(AUDIENCE_PROVIDER)
+        .defaultHandlers()
+        .decorator(
+            component ->
+                EdgyUtils.bukkit()
+                    .messages()
+                    .component("<red><sm_caps:error> <dark_grey>→ <white>"))
+        .registerTo(commandManager);
 
     try {
       boolean parseAll = true;
-      for (AbstractCommandContainer<CommandSender, BukkitCommandManager<CommandSender>> container : containers) {
+      for (AbstractCommandContainer<Source, PaperCommandManager<Source>> container : containers) {
         if (container.getClass().isAnnotationPresent(CommandContainer.class)) {
           annotationParser.parse(container);
           parseAll = false;
@@ -154,16 +154,15 @@ public class CloudCommands {
       if (parseAll) {
         annotationParser.parseContainers();
       }
-    } catch (Exception e) {
-      Bukkit.getLogger().log(Level.SEVERE, "Failed to parse command containers!");
-      e.printStackTrace();
+    } catch (Exception err) {
+      EdgyUtils.logger().log(Level.SEVERE, "Failed to parse command containers!", err);
     }
 
-    for (AbstractCommandContainer<CommandSender, BukkitCommandManager<CommandSender>> container : containers) {
+    for (AbstractCommandContainer<Source, PaperCommandManager<Source>> container : containers) {
       container.registerCommands(commandManager);
     }
 
-    BUKKIT_DEBUG_CONTAINER.registerCommands(commandManager);
+    PAPER_DEFAULT_CONTAINER.registerCommands(commandManager);
 
     CloudCommands.commandManager = commandManager;
   }

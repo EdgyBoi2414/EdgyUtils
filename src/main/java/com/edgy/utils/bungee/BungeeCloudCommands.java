@@ -1,94 +1,77 @@
 package com.edgy.utils.bungee;
 
-import cloud.commandframework.CommandManager;
-import cloud.commandframework.CommandTree;
-import cloud.commandframework.annotations.AnnotationParser;
-import cloud.commandframework.annotations.processing.CommandContainer;
-import cloud.commandframework.arguments.parser.ParserParameters;
-import cloud.commandframework.arguments.parser.StandardParameters;
-import cloud.commandframework.bungee.BungeeCommandManager;
-import cloud.commandframework.execution.AsynchronousCommandExecutionCoordinator;
-import cloud.commandframework.execution.CommandExecutionCoordinator;
-import cloud.commandframework.meta.CommandMeta;
-import cloud.commandframework.minecraft.extras.AudienceProvider;
-import cloud.commandframework.minecraft.extras.MinecraftExceptionHandler;
 import com.edgy.utils.EdgyUtils;
 import com.edgy.utils.shared.DebugLogger;
 import java.util.List;
-import java.util.function.Function;
 import java.util.logging.Level;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.platform.bungeecord.BungeeAudiences;
 import net.md_5.bungee.api.CommandSender;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.incendo.cloud.CommandManager;
+import org.incendo.cloud.SenderMapper;
+import org.incendo.cloud.annotations.AnnotationParser;
+import org.incendo.cloud.annotations.processing.CommandContainer;
+import org.incendo.cloud.bungee.BungeeCommandManager;
+import org.incendo.cloud.execution.ExecutionCoordinator;
+import org.incendo.cloud.minecraft.extras.AudienceProvider;
+import org.incendo.cloud.minecraft.extras.MinecraftExceptionHandler;
 import org.jetbrains.annotations.NotNull;
 
 public class BungeeCloudCommands {
+
+  private final static BungeeAudiences BUNGEE_AUDIENCES = BungeeAudiences.create(EdgyUtils.bungee());
+  private final static AudienceProvider<CommandSender> AUDIENCE_PROVIDER = new AudienceProvider<>() {
+    @Override
+    public @NonNull Audience apply(@NotNull CommandSender sender) {
+      return BUNGEE_AUDIENCES.sender(sender);
+    }
+  };
 
   private final static BungeeAbstractCommandContainer<CommandSender, CommandManager<CommandSender>> BUNGEE_DEBUG_CONTAINER = new BungeeAbstractCommandContainer<>() {
     @Override
     protected void registerCommands(CommandManager<CommandSender> commandManager) {
       commandManager.command(
-          commandManager.commandBuilder("edgyutils", "eu")
+          commandManager.commandBuilder("bungeeedgyutils", "beu", "butils")
               .literal("debug")
               .senderType(CommandSender.class)
               .handler(context -> {
                 DebugLogger.enabled(!DebugLogger.enabled());
-                context.getSender().sendMessage(
+                EdgyUtils.bungee().messages().sendMessage(
+                        context.sender(),
                     "Debug mode is now " + (DebugLogger.enabled() ? "enabled" : "disabled"));
               })
       );
     }
   };
 
-  private static CommandManager<CommandSender> commandManager = null;
+  private static BungeeCommandManager<CommandSender> commandManager = null;
 
-  public static void bungee(
-      List<BungeeAbstractCommandContainer<CommandSender, BungeeCommandManager<CommandSender>>> containers) {
-    final Function<CommandTree<CommandSender>, CommandExecutionCoordinator<CommandSender>> executionCoordinatorFunction =
-        AsynchronousCommandExecutionCoordinator.<CommandSender>builder().build();
-    final Function<CommandSender, CommandSender> mapperFunction = Function.identity();
+  public static void bungee(List<BungeeAbstractCommandContainer<CommandSender, BungeeCommandManager<CommandSender>>> containers) {
     final BungeeCommandManager<CommandSender> commandManager;
     final AnnotationParser<CommandSender> annotationParser;
-    final BungeeAudiences bungeeAudiences = BungeeAudiences.create(EdgyUtils.bungee());
 
     try {
       commandManager = new BungeeCommandManager<>(
-          EdgyUtils.bungee(),
-          executionCoordinatorFunction,
-          mapperFunction,
-          mapperFunction
+              EdgyUtils.bungee(),
+              ExecutionCoordinator.simpleCoordinator(),
+              SenderMapper.identity()
       );
-    } catch (Exception e) {
-      EdgyUtils.bungee().getLogger().log(Level.SEVERE, "Failed to initialize command manager!");
-      e.printStackTrace();
+    } catch (Exception err) {
+      EdgyUtils.logger().log(Level.SEVERE, "Failed to initialize command manager!", err);
       return;
     }
 
-    final Function<ParserParameters, CommandMeta> commandMetaFunction = p ->
-        CommandMeta.simple()
-            .with(CommandMeta.DESCRIPTION, p.get(StandardParameters.DESCRIPTION, "No description"))
-            .build();
-    annotationParser = new AnnotationParser<>(
-        commandManager,
-        CommandSender.class,
-        commandMetaFunction
-    );
+    annotationParser = new AnnotationParser<>(commandManager, CommandSender.class);
 
-    AudienceProvider<CommandSender> audience = new AudienceProvider<>() {
-      @Override
-      public @NonNull Audience apply(@NotNull CommandSender sender) {
-        return bungeeAudiences.sender(sender);
-      }
-    };
-
-    new MinecraftExceptionHandler<CommandSender>()
-        .withInvalidSyntaxHandler()
-        .withInvalidSenderHandler()
-        .withNoPermissionHandler()
-        .withArgumentParsingHandler()
-        .withCommandExecutionHandler()
-        .apply(commandManager, audience);
+    MinecraftExceptionHandler.create(AUDIENCE_PROVIDER)
+            .defaultHandlers()
+            .decorator(
+                    component ->
+                            EdgyUtils.bungee()
+                                    .messages()
+                                    .component("<red><sm_caps:error> <dark_grey>→ <white>"))
+            .registerTo(commandManager);
 
     try {
       boolean parseAll = true;
@@ -101,9 +84,8 @@ public class BungeeCloudCommands {
       if (parseAll) {
         annotationParser.parseContainers();
       }
-    } catch (Exception e) {
-      EdgyUtils.bungee().getLogger().log(Level.SEVERE, "Failed to parse command containers!");
-      e.printStackTrace();
+    } catch (Exception err) {
+      EdgyUtils.logger().log(Level.SEVERE, "Failed to parse command containers!", err);
     }
 
     for (BungeeAbstractCommandContainer<CommandSender, BungeeCommandManager<CommandSender>> container : containers) {
